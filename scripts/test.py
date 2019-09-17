@@ -27,6 +27,8 @@ from model.action_prop_dense_cap import ActionPropDenseCap
 from tools.eval_proposal_anet import ANETproposal
 from data.utils import update_values
 
+import sys
+print(sys.path)
 parser = argparse.ArgumentParser()
 
 # Data input settings
@@ -213,11 +215,11 @@ def eval_results(densecap_result, prop_result, args):
     with open(os.path.join('./results/', 'densecap_'+args.val_data_folder+'_'+args.id+ '.json'), 'w') as f:
         json.dump(dense_cap_all, f)
 
-    subprocess.Popen(["python2", args.densecap_eval_file, "-s", \
-                      os.path.join('./results/', 'densecap_'+args.val_data_folder+'_' + args.id + '.json'), \
-                      "-v", "-r"] + \
-                      args.densecap_references \
-                      )
+    #subprocess.Popen(["python2", args.densecap_eval_file, "-s", \
+    #                  os.path.join('./results/', 'densecap_'+args.val_data_folder+'_' + args.id + '.json'), \
+    #                  "-v", "-r"] + \
+    #                  args.densecap_references \
+    #                  )
 
     # write proposals to json file for evaluation (proposal)
     prop_all = {'version':'VERSION 1.0', 'results':prop_result,
@@ -239,7 +241,6 @@ def eval_results(densecap_result, prop_result, args):
 
 
 def main():
-
     print('loading dataset')
     test_loader, text_proc = get_dataset(args)
 

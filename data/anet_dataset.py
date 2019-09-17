@@ -11,7 +11,9 @@ import numpy as np
 import csv
 from collections import defaultdict
 import math
-import multiprocessing
+#import multiprocessing
+#from torch import multiprocessing 
+#multiprocessing.set_start_method('spawn')
 import pickle
 from random import shuffle
 
@@ -69,7 +71,8 @@ class ANetDataset(Dataset):
                  pos_thresh, neg_thresh, stride_factor, dataset, save_samplelist=False,
                  load_samplelist=False, sample_listpath=None):
         super(ANetDataset, self).__init__()
-
+        print("Sample List path is : {}".format(sample_listpath))
+        print("Should save list : {}".format(save_samplelist))
         split_paths = []
         for split_dev in split:
             split_paths.append(os.path.join(image_path, split_dev))
@@ -136,21 +139,26 @@ class ANetDataset(Dataset):
             neg_anchor_stats = []
             # load annotation per video and construct training set
             missing_prop = 0
-            with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+            #with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+            if True:
                 results = [None]*len(raw_data)
                 vid_idx = 0
+                tot_items = len(raw_data)
+                curr = 0
                 for vid, val in raw_data.items():
                     annotations = val['annotations']
+                    print("At {}/{}".format(curr, tot_items))
+                    curr += 1
                     for split_path in split_paths:
                         if val['subset'] in split and os.path.isfile(os.path.join(split_path, vid + '_bn.npy')):
-                            results[vid_idx] = pool.apply_async(_get_pos_neg,
-                                         (split_path, annotations, vid,
+                            results[vid_idx] = _get_pos_neg(
+                                         split_path, annotations, vid,
                                           slide_window_size, frame_to_second[vid], anc_len_all,
-                                          anc_cen_all, pos_thresh, neg_thresh))
+                                          anc_cen_all, pos_thresh, neg_thresh)
                             vid_idx += 1
                 results = results[:vid_idx]
                 for i, r in enumerate(results):
-                    results[i] = r.get()
+                    results[i] = r
 
             vid_counter = 0
             for r in results:
@@ -182,9 +190,11 @@ class ANetDataset(Dataset):
             ))
 
             if save_samplelist:
+                print("Saving Sample List")
                 with open(sample_listpath, 'wb') as f:
                     pickle.dump(self.sample_list, f)
         else:
+            print("Loading Sample list")
             with open(sample_listpath, 'rb') as f:
                 self.sample_list = pickle.load(f)
 
