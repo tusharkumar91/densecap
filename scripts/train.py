@@ -48,7 +48,7 @@ parser.add_argument('--load_valid_samplelist', action='store_true')
 parser.add_argument('--valid_samplelist_path', type=str, default='/home/cxu-serve/p1/tusharku/densecap/data/valid_samplelist.pkl')
 parser.add_argument('--start_from', default='', help='path to a model checkpoint to initialize model weights from. Empty = dont')
 parser.add_argument('--max_sentence_len', default=20, type=int)
-parser.add_argument('--num_workers', default=1, type=int)
+parser.add_argument('--num_workers', default=0, type=int)
 
 # Model settings: General
 parser.add_argument('--d_model', default=1024, type=int, help='size of the rnn in number of hidden nodes in each layer')
@@ -66,7 +66,7 @@ parser.add_argument('--sample_prob', default=0, type=float, help='probability fo
 # Model settings: Proposal and mask
 parser.add_argument('--slide_window_size', default=480, type=int, help='the (temporal) size of the sliding window')
 parser.add_argument('--slide_window_stride', default=20, type=int, help='the step size of the sliding window')
-parser.add_argument('--sampling_sec', default=0.5, help='sample frame (RGB and optical flow) with which time interval')
+parser.add_argument('--sampling_sec', default=2, help='sample frame (RGB and optical flow) with which time interval')
 parser.add_argument('--kernel_list', default=[1, 2, 3, 4, 5, 7, 9, 11, 15, 21, 29, 41, 57, 71, 111, 161, 211, 251],
                     type=int, nargs='+')
 parser.add_argument('--pos_thresh', default=0.7, type=float)
@@ -125,7 +125,8 @@ print(args)
 
 # arguments inspection
 assert(args.slide_window_size >= args.slide_window_stride)
-assert(args.sampling_sec == 0.5) # attention! sampling_sec is hard coded as 0.5
+# Disable the assert to allow different sampling_sec arg values
+#assert(args.sampling_sec == 0.5) # attention! sampling_sec is hard coded as 0.5
 
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
@@ -143,6 +144,7 @@ def get_dataset(args):
     train_dataset = ANetDataset(args.feature_root,
                                 args.train_data_folder,
                                 args.slide_window_size,
+                                args.sampling_sec,
                                 args.dur_file,
                                 args.kernel_list,
                                 text_proc, raw_data,
@@ -172,6 +174,7 @@ def get_dataset(args):
     valid_dataset = ANetDataset(args.feature_root,
                                 args.val_data_folder,
                                 args.slide_window_size,
+                                args.sampling_sec,
                                 args.dur_file,
                                 args.kernel_list,
                                 text_proc, raw_data,

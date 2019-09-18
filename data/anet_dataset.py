@@ -66,13 +66,15 @@ def get_vocab_and_sentences(dataset_file, max_length=20):
 
 # dataloader for training
 class ANetDataset(Dataset):
-    def __init__(self, image_path, split, slide_window_size,
+    def __init__(self, image_path, split, slide_window_size, sampling_sec,
                  dur_file, kernel_list, text_proc, raw_data,
                  pos_thresh, neg_thresh, stride_factor, dataset, save_samplelist=False,
                  load_samplelist=False, sample_listpath=None):
         super(ANetDataset, self).__init__()
         print("Sample List path is : {}".format(sample_listpath))
         print("Should save list : {}".format(save_samplelist))
+        print("Sampling : {}".format(sampling_sec))
+        print("Slide Window Size : {}".format(slide_window_size))
         split_paths = []
         for split_dev in split:
             split_paths.append(os.path.join(image_path, split_dev))
@@ -121,7 +123,7 @@ class ANetDataset(Dataset):
             anc_cen_all = np.hstack(anc_cen_lst)
 
             frame_to_second = {}
-            sampling_sec = 0.5 # hard coded, only support 0.5
+            #sampling_sec = 0.5 # hard coded, only support 0.5
             with open(dur_file) as f:
                 if dataset == 'anet':
                     for line in f:
@@ -228,16 +230,18 @@ def _get_pos_neg(split_path, annotations, vid,
             np.load(video_prefix + '_resnet.npy')).float()
         bn_feat = torch.from_numpy(
             np.load(video_prefix + '_bn.npy')).float()
-
+        
         if resnet_feat.size(0) != bn_feat.size(0):
             raise Exception(
                 'number of frames does not match in feature!')
         total_frame = bn_feat.size(0)
-
+        print(vid, resnet_feat.size(), bn_feat.size())
         window_start = 0
         window_end = slide_window_size
         window_start_t = window_start * sampling_sec
         window_end_t = window_end * sampling_sec
+        print(window_start_t, window_end_t)
+        #exit(0)
         pos_seg = defaultdict(list)
         neg_overlap = [0] * anc_len_all.shape[0]
         pos_collected = [False] * anc_len_all.shape[0]
