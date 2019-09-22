@@ -19,7 +19,7 @@ class YouCookQA(torch.utils.data.Dataset):
         self.initialize_data()
 
     def initialize_data(self):
-        with open("data/final_db_3K_combined_without_yesno.json") as f:
+        with open("final_db_3K_combined_without_yesno.json") as f:
             qa_data = json.load(f)
         for qa in qa_data["QAPairs"]:
             if qa["split"] == self.split:
@@ -32,7 +32,7 @@ class YouCookQA(torch.utils.data.Dataset):
                     idx = idx - 1
                 answers = np.zeros((5, 36))
                 answer_tokens = word_tokenize(qa["answer"])
-
+                idx = -1
                 for token in answer_tokens:
                     answers[0][idx] = self.vocab[token]
                     idx = idx - 1
@@ -51,7 +51,7 @@ class YouCookQA(torch.utils.data.Dataset):
         print('Total {} qa pairs in {}'.format(len(self.qa_ans_vid_data), self.split))
 
     def initialize_vocab(self):
-        dict_dir = 'data/vocab_3K_combined_without_yesno.json'
+        dict_dir = 'vocab_3K_combined_without_yesno.json'
         with open(dict_dir) as f:
             word_to_idx = json.load(f)
         self.vocab = word_to_idx
@@ -90,7 +90,7 @@ class YouCookQA(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    dataset = YouCookQA(image_path=None, split='training', slide_window_size=480)
+    dataset = YouCookQA(image_path='.', split='validation', slide_window_size=480)
     img_feat, q, ch, ans_idx = dataset[0]
     print(q)
     print(ch)
