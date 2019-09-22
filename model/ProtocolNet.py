@@ -41,7 +41,6 @@ class ProtocolNet(nn.Module):
     def multiheads(self, VQ_feature, Q_feature, choices, ans_idx):
         batch_size = Q_feature.size(0)
         n_choices = choices.size(1)
-
         if self.training:
             # permute the answer order during training (we keep it same for each batch for now)
             idx_permute = torch.randperm(n_choices)
@@ -51,7 +50,8 @@ class ProtocolNet(nn.Module):
         else:
             # the correct answer is always at the begining for evaluation
             target = VQ_feature.new(batch_size, n_choices).fill_(0) # dummy
-            embeded_A = self.embeds_QA(self.mat_a_sentence.long().to(device))
+            target[:, 0] = 1
+            embeded_A = self.embeds_QA(choices.long().to(device))
 
         A_feature = self.A_LSTM(embeded_A.view(-1, embeded_A.size(2), embeded_A.size(3)), \
             ).squeeze().view(embeded_A.size(0), 5, -1)
@@ -62,5 +62,4 @@ class ProtocolNet(nn.Module):
             cat_feature = torch.cat([VQ_feature.unsqueeze(1).expand_as(A_feature), A_feature], dim=-1)
 
         outs = self.FC(cat_feature).squeeze()
-
         return outs, target

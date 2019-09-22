@@ -81,7 +81,7 @@ parser.add_argument('--max_epochs', default=20, type=int, help='max number of ep
 parser.add_argument('--batch_size', default=32, type=int, help='what is the batch size in number of images per batch? (there will be x seq_per_img sentences)')
 parser.add_argument('--valid_batch_size', default=64, type=int)
 parser.add_argument('--vqa_batch_size', default=32, type=int, help='what is the batch size in number of qa pairs per batch?')
-parser.add_argument('--valid_vqa_batch_size', default=64, type=int)
+parser.add_argument('--valid_vqa_batch_size', default=128, type=int)
 parser.add_argument('--cls_weight', default=1.0, type=float)
 parser.add_argument('--reg_weight', default=10, type=float)
 parser.add_argument('--sent_weight', default=0.25, type=float)
@@ -200,6 +200,7 @@ def get_dataset(args):
     return train_loader, valid_loader, text_proc, train_sampler
 
 def get_vqa_dataset(args):
+    args.distributed = args.world_size > 1
     # Create the dataset and data loader instance
     train_dataset = YouCookQADataset(args.feature_root,
                                 args.train_data_folder[0],
@@ -207,7 +208,7 @@ def get_vqa_dataset(args):
                                 )
 
     train_loader = DataLoader(train_dataset,
-                              batch_size=args.batch_size,
+                              batch_size=args.vqa_batch_size,
                               shuffle=True,
                               num_workers=args.num_workers)
 
@@ -217,10 +218,10 @@ def get_vqa_dataset(args):
                                 )
 
     valid_loader = DataLoader(valid_dataset,
-                              batch_size=args.valid_batch_size,
+                              batch_size=args.valid_vqa_batch_size,
                               shuffle=False,
                               num_workers=args.num_workers)
-    vocab_size = len(train_dataset.vocab)
+    vocab_size = len(train_dataset.vocab)+1
     return train_loader, valid_loader, vocab_size
 
 
@@ -325,7 +326,7 @@ def main(args):
     # Number of parameter blocks in the network
     #print("# of param blocks: {}".format(str(len(list(model.parameters())))))
 
-    best_vqa_loss = float('inf')
+    best_vqa_accuracy = -1*float('inf')
 
     if args.enable_visdom:
         import visdom
@@ -354,14 +355,14 @@ def main(args):
         #                    vis, vis_window, args)
         # all_training_losses.append(epoch_loss)
 
-        vqa_epoch_loss = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
+        vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
                            vis, vis_window, args)
         all_vqa_training_losses.append(vqa_epoch_loss)
 
         # (valid_loss, val_cls_loss,
         #  val_reg_loss, val_sent_loss, val_mask_loss) = valid(model, valid_loader)
 
-        vqa_valid_loss = valid_vqa(vqa_model, vqa_valid_loader)
+        vqa_valid_loss, vqa_valid_accuracy = valid_vqa(vqa_model, vqa_valid_loader)
 
         all_vqa_eval_losses.append(vqa_valid_loss)
 
@@ -451,13 +452,15 @@ def main(args):
         # ))
 
 
-        if vqa_valid_loss < best_vqa_loss:
-            best_loss = vqa_valid_loss
+        #if vqa_valid_loss < best_vqa_loss:
+        if vqa_valid_accuracy > best_vqa_accuracy:
+            #best_loss = vqa_valid_loss
+            best_vqa_accuracy = vqa_valid_accuracy
             if (args.distributed and dist.get_rank() == 0) or not args.distributed:
-                torch.save(vqa_model.module.state_dict(), os.path.join(args.checkpoint_path, 'best_vqa_model.t7'))
+                torch.save(vqa_model.state_dict(), os.path.join(args.checkpoint_path, 'best_vqa_model.t7'))
             print('*'*5)
-            print('Better validation loss {:.4f} found, save model'.format(vqa_valid_loss))
-
+            print('Better validation accuracy found {:.4f} found, save model'.format(vqa_valid_accuracy))
+        print('Best accuracy found till now {}'.format(best_vqa_accuracy))
         # save eval and train losses
         # if (args.distributed and dist.get_rank() == 0) or not args.distributed:
         #     torch.save({'train_loss':all_training_losses,
@@ -469,7 +472,7 @@ def main(args):
         #                 }, os.path.join(args.checkpoint_path, 'model_losses.t7'))
 
         # learning rate decay
-        vqa_scheduler.step(vqa_valid_loss)
+        vqa_scheduler.step(vqa_valid_accuracy)
 
         # validation/save checkpoint every a few epochs
         if train_epoch%args.save_checkpoint_every == 0 or train_epoch == args.max_epochs:
@@ -493,7 +496,8 @@ def train_vqa(epoch, model, optimizer, train_loader, vis, vis_window, args):
     train_loss = []
     nbatches = len(train_loader)
     t_iter_start = time.time()
-
+    pred_idx = []
+    gt_idx = []
     for train_iter, data in enumerate(train_loader):
         (img_batch, q, ch, ans_idx) = data
         img_batch = Variable(img_batch)
@@ -509,6 +513,12 @@ def train_vqa(epoch, model, optimizer, train_loader, vis, vis_window, args):
 
         t_model_start = time.time()
         outs, gt = model(img_batch, q, ch, ans_idx)
+        _, batch_pred_idx = torch.max(outs, 1)
+        batch_pred_idx = batch_pred_idx.cpu().detach().numpy()
+        batch_gt_idx = ans_idx.cpu().detach().numpy()
+        pred_idx += [ idx for idx in batch_pred_idx]
+        gt_idx += [ idx for idx in batch_gt_idx]
+
         loss = MaxMarginCriterion(0.2)(outs, gt)
 
         optimizer.zero_grad()
@@ -550,8 +560,13 @@ def train_vqa(epoch, model, optimizer, train_loader, vis, vis_window, args):
         ), end='\r')
 
         t_iter_start = time.time()
-
-    return np.mean(train_loss)
+        #break
+    correct = 0.0
+    total = len(gt_idx)
+    for idx, val in enumerate(gt_idx):
+        if val == pred_idx[idx]:
+            correct +=1
+    return np.mean(train_loss), correct/total
 
 ### Training the network ###
 def train(epoch, model, optimizer, train_loader, vis, vis_window, args):
@@ -661,10 +676,11 @@ def valid_vqa(model, loader):
     val_reg_loss = []
     val_sent_loss = []
     val_mask_loss = []
-    for iter, data in enumerate(loader):
-        (img_batch, tempo_seg_pos, tempo_seg_neg, sentence_batch) = data
+    gt_idx = []
+    pred_idx = []
+    for batch_idx, data in enumerate(loader):
+        (img_batch, q, ch, ans_idx) = data
         with torch.no_grad():
-            img_batch = Variable(img_batch)
             img_batch = Variable(img_batch)
             q = Variable(q)
             ch = Variable(ch)
@@ -675,13 +691,21 @@ def valid_vqa(model, loader):
                 q = q.cuda()
                 ch = ch.cuda()
                 ans_idx = ans_idx.cuda()
-
             outs, gt = model(img_batch, q, ch, ans_idx)
+            _, batch_pred_idx = torch.max(outs, 1)
+            batch_pred_idx = batch_pred_idx.cpu().detach().numpy()
+            batch_gt_idx = ans_idx.cpu().detach().numpy()
+            pred_idx += [ idx for idx in batch_pred_idx]
+            gt_idx += [ idx for idx in batch_gt_idx]
             loss = MaxMarginCriterion(0.2)(outs, gt)
-
             valid_loss.append(loss.data.item())
-
-    return np.mean(valid_loss)
+            #break
+    correct = 0.0
+    total = len(gt_idx)
+    for idx, val in enumerate(gt_idx):
+        if val == pred_idx[idx]:
+            correct +=1
+    return np.mean(valid_loss), correct/total
 
 
 
