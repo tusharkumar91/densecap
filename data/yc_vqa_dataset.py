@@ -8,7 +8,7 @@ import numpy as np
 from nltk import word_tokenize
 import math
 
-class YouCookQA(torch.utils.data.Dataset):
+class YouCookQADataset(torch.utils.data.Dataset):
     def __init__(self, image_path, split='training', slide_window_size=480):
         self.split = split
         self.slide_window_size = slide_window_size
@@ -90,7 +90,7 @@ class YouCookQA(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    dataset = YouCookQA(image_path='.', split='validation', slide_window_size=480)
+    dataset = YouCookQADataset(image_path='.', split='validation', slide_window_size=480)
     img_feat, q, ch, ans_idx = dataset[0]
     print(q)
     print(ch)
