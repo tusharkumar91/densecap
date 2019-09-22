@@ -39,7 +39,6 @@ class ProtocolNet(nn.Module):
         super(ProtocolNet, self).__init__()
         self.model = mode
         self.slide_window_size = 480
-
         self.in_dim = 1024 # hard coded for now...
         self.hidden_dim = 500
         self.out_dim = 1

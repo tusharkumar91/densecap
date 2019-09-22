@@ -12,10 +12,11 @@ fc_dict = {'QA': 1024, 'LSTM': 2024, 'MAC': 2560}
 
 
 class TransformerBaseline(ProtocolNet):
-    def __init__(self, mode='Trans', fusion_mode='Embed'):
+    def __init__(self, vocab_size, mode='Trans'):
         self.name = mode
+        self.vocab_size = vocab_size
         fc_n_feature = 1024
-        super(TransformerBaseline, self).__init__(1024 + 512, mode, fusion_mode)
+        super(TransformerBaseline, self).__init__(1024 + 512, mode)
         self.linear = nn.Sequential(nn.Linear(1024, 512))
 
 

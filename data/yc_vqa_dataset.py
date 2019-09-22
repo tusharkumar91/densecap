@@ -14,12 +14,13 @@ class YouCookQADataset(torch.utils.data.Dataset):
         self.slide_window_size = slide_window_size
         self.vocab = {}
         self.qa_ans_vid_data = []
+        self.image_path = image_path
         self.split_path = os.path.join(image_path, split)
         self.initialize_vocab()
         self.initialize_data()
 
     def initialize_data(self):
-        with open("final_db_3K_combined_without_yesno.json") as f:
+        with open(os.path.join(self.image_path, "final_db_3K_combined_without_yesno.json")) as f:
             qa_data = json.load(f)
         for qa in qa_data["QAPairs"]:
             if qa["split"] == self.split:
@@ -51,7 +52,7 @@ class YouCookQADataset(torch.utils.data.Dataset):
         print('Total {} qa pairs in {}'.format(len(self.qa_ans_vid_data), self.split))
 
     def initialize_vocab(self):
-        dict_dir = 'vocab_3K_combined_without_yesno.json'
+        dict_dir = os.path.join(self.image_path, 'vocab_3K_combined_without_yesno.json')
         with open(dict_dir) as f:
             word_to_idx = json.load(f)
         self.vocab = word_to_idx

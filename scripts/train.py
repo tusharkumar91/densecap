@@ -202,7 +202,7 @@ def get_dataset(args):
 def get_vqa_dataset(args):
     # Create the dataset and data loader instance
     train_dataset = YouCookQADataset(args.feature_root,
-                                args.train_data_folder,
+                                args.train_data_folder[0],
                                 args.slide_window_size,
                                 )
 
@@ -211,8 +211,8 @@ def get_vqa_dataset(args):
                               shuffle=True,
                               num_workers=args.num_workers)
 
-    valid_dataset = ANetDataset(args.feature_root,
-                                args.val_data_folder,
+    valid_dataset = YouCookQADataset(args.feature_root,
+                                args.val_data_folder[0],
                                 args.slide_window_size,
                                 )
 
@@ -220,8 +220,8 @@ def get_vqa_dataset(args):
                               batch_size=args.valid_batch_size,
                               shuffle=False,
                               num_workers=args.num_workers)
-
-    return train_loader, valid_loader
+    vocab_size = len(train_dataset.vocab)
+    return train_loader, valid_loader, vocab_size
 
 
 def get_model(text_proc, args):
@@ -259,8 +259,8 @@ def get_model(text_proc, args):
         #     model.cuda()
     return model
 
-def get_vqa_model(args):
-    model = TransformerBaseline(mode='TRANS')
+def get_vqa_model(args, vocab_size):
+    model = TransformerBaseline(vocab_size=vocab_size, mode='TRANS')
     # Ship the model to GPU, maybe
     if args.cuda:
         model = model.cuda()
@@ -282,13 +282,14 @@ def main(args):
 
     print('loading dataset')
     #train_loader, valid_loader, text_proc, train_sampler = get_dataset(args)
-    vqa_train_loader, vqa_valid_loader = get_vqa_dataset(args)
+    vqa_train_loader, vqa_valid_loader, vocab_size = get_vqa_dataset(args)
 
     print('building model')
     #model = get_model(text_proc, args)
-    vqa_model = get_vqa_model(args)
+    vqa_model = get_vqa_model(args, vocab_size)
+    print(vqa_model.vocab_size)
 
-    vqa_optimizer = torch.optim.Adam(lr=5E-4)
+    vqa_optimizer = torch.optim.Adam(vqa_model.parameters(), lr=5E-4)
     vqa_scheduler = lr_scheduler.ReduceLROnPlateau(vqa_optimizer, 'max', factor=0.25,
                                              # not tuned, hard code for now
                                              patience=4,
