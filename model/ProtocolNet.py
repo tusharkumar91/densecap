@@ -7,35 +7,9 @@ from model.LSTM import Question_LSTM
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class DropoutTime1D(nn.Module):
-    '''
-    assumes the first dimension is batch,
-    input in shape B x T x H
-    '''
-    def __init__(self, p_drop):
-        super(DropoutTime1D, self).__init__()
-        self.p_drop = p_drop
-
-    def forward(self, x):
-        if self.training:
-            mask = x.data.new(x.data.size(0),x.data.size(1), 1).uniform_()
-            mask = Variable((mask > self.p_drop).float())
-            return x * mask
-        else:
-            return x * (1-self.p_drop)
-
-    def init_params(self):
-        pass
-
-    def __repr__(self):
-        repstr = self.__class__.__name__ + ' (\n'
-        repstr += "{:.2f}".format(self.p_drop)
-        repstr += ')'
-        return repstr
-
 
 class ProtocolNet(nn.Module):
-    def __init__(self, fc_n_feature, mode='LSTM'):
+    def __init__(self, fc_n_feature, mode='LSTM', d_model=1024):
         super(ProtocolNet, self).__init__()
         self.model = mode
         self.slide_window_size = 480
@@ -51,7 +25,7 @@ class ProtocolNet(nn.Module):
         self.Q_LSTM = Question_LSTM().to(device)
         self.A_LSTM = Question_LSTM().to(device)
         self.embeds_QA = nn.Embedding(int(self.vocab_size), 300).to(device)
-        d_model = 512  # Original res feature is 512d
+        #d_model = 512  # Original res feature is 512d
 
         output_size = 512
         if self.model != 'QA':
