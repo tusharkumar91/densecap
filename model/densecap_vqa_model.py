@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn
 from model.ProtocolNet import ProtocolNet
 from model.transformer import Transformer
+from model.frame_encoder import FrameEncoder
 import sys
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -62,23 +63,23 @@ class TransformerBaseline(ProtocolNet):
         fc_n_feature = 1024
         super(TransformerBaseline, self).__init__(1024 + 512, mode)
         self.linear = nn.Sequential(nn.Linear(1024, 512))
+        self.frame_emb = FrameEncoder(d_model, in_emb_dropout, 2048, 2, 8, 0.2)
+        # self.rgb_emb = nn.Linear(2048, d_model // 2)
+        # self.flow_emb = nn.Linear(1024, d_model // 2)
+        # self.emb_out = nn.Sequential(
+        #     # nn.BatchNorm1d(h_dim),
+        #     DropoutTime1D(in_emb_dropout),
+        #     nn.ReLU()
+        # )
+        #
+        # self.vis_emb = Transformer(d_model, 0, 0,
+        #                            d_hidden=2048,
+        #                            n_layers=2,
+        #                            n_heads=8,
+        #                            drop_ratio=0.2)
 
-        self.rgb_emb = nn.Linear(2048, d_model // 2)
-        self.flow_emb = nn.Linear(1024, d_model // 2)
-        self.emb_out = nn.Sequential(
-            # nn.BatchNorm1d(h_dim),
-            DropoutTime1D(in_emb_dropout),
-            nn.ReLU()
-        )
 
-        self.vis_emb = Transformer(d_model, 0, 0,
-                                   d_hidden=2048,
-                                   n_layers=2,
-                                   n_heads=8,
-                                   drop_ratio=0.2)
-
-
-    def forward(self, img_feat, q, choices, ans_idx, encoder=None):
+    def forward(self, img_feat, q, choices, ans_idx):
         # print("forward called")
         tic = time.time()
         tok = time.time()
@@ -87,18 +88,7 @@ class TransformerBaseline(ProtocolNet):
         Q_feature = self.Q_LSTM(embeded_Q)
 
         tic = time.time()
-        #V_feature = encoder(img_feat)
-        if encoder is None:
-            x_rgb, x_flow = torch.split(img_feat, 2048, 2)
-            x_rgb = self.rgb_emb(x_rgb.contiguous())
-            x_flow = self.flow_emb(x_flow.contiguous())
-            x = torch.cat((x_rgb, x_flow), 2)
-            x = self.emb_out(x)
-            V_feature, all_emb = self.vis_emb(x)
-        else:
-            V_feature = encoder(img_feat)
-
-
+        V_feature, all_emb = self.frame_emb(img_feat)
         V_feature = self.linear(V_feature)
         V_feature = nn.MaxPool1d(kernel_size=V_feature.shape[1])(V_feature.view(V_feature.size(0), 512, -1)).squeeze(2)
         tok = time.time()

@@ -282,51 +282,48 @@ def main(args):
             raise
 
     print('loading dataset')
-    #train_loader, valid_loader, text_proc, train_sampler = get_dataset(args)
+    train_loader, valid_loader, text_proc, train_sampler = get_dataset(args)
     vqa_train_loader, vqa_valid_loader, vocab_size = get_vqa_dataset(args)
 
     print('building model')
-    #model = get_model(text_proc, args)
+    model = get_model(text_proc, args)
     vqa_model = get_vqa_model(args, vocab_size)
     print(vqa_model.vocab_size)
 
     vqa_optimizer = torch.optim.Adam(vqa_model.parameters(), lr=5E-4)
     vqa_scheduler = lr_scheduler.ReduceLROnPlateau(vqa_optimizer, 'max', factor=0.25,
-                                             # not tuned, hard code for now
                                              patience=4,
                                              verbose=True)
 
-    # loss_func = torch.nn.BCELoss()  # the target label is NOT an one-hotted
-    # loss_func = torch.nn.BCEWithLogitsLoss()
-    # loss_func = torch.nn.CrossEntropyLoss()
 
     # filter params that don't require gradient (credit: PyTorch Forum issue 679)
     # smaller learning rate for the decoder
-    # if args.optim == 'adam':
-    #     optimizer = optim.Adam(
-    #         filter(lambda p: p.requires_grad, model.parameters()),
-    #         args.learning_rate, betas=(args.alpha, args.beta), eps=args.epsilon)
-    # elif args.optim == 'sgd':
-    #     optimizer = optim.SGD(
-    #         filter(lambda p: p.requires_grad, model.parameters()),
-    #         args.learning_rate,
-    #         weight_decay=1e-5,
-    #         momentum=args.alpha,
-    #         nesterov=True
-    #     )
-    # else:
-    #     raise NotImplementedError
+    if args.optim == 'adam':
+        optimizer = optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            args.learning_rate, betas=(args.alpha, args.beta), eps=args.epsilon)
+    elif args.optim == 'sgd':
+        optimizer = optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            args.learning_rate,
+            weight_decay=1e-5,
+            momentum=args.alpha,
+            nesterov=True
+        )
+    else:
+        raise NotImplementedError
 
     # learning rate decay every 1 epoch
-    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.reduce_factor,
-    #                                            patience=args.patience_epoch,
-    #                                            verbose=True)
-    # scheduler = lr_scheduler.ExponentialLR(optimizer, 0.6)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.reduce_factor,
+                                               patience=args.patience_epoch,
+                                               verbose=True)
+    scheduler = lr_scheduler.ExponentialLR(optimizer, 0.6)
 
     # Number of parameter blocks in the network
-    #print("# of param blocks: {}".format(str(len(list(model.parameters())))))
+    print("# of param blocks: {}".format(str(len(list(model.parameters())))))
 
     best_vqa_accuracy = -1*float('inf')
+    best_loss = float('inf')
 
     if args.enable_visdom:
         import visdom
@@ -348,19 +345,20 @@ def main(args):
         t_epoch_start = time.time()
         print('Epoch: {}'.format(train_epoch))
 
-        # if args.distributed:
-        #     train_sampler.set_epoch(train_epoch)
+        if args.distributed:
+            train_sampler.set_epoch(train_epoch)
 
-        # epoch_loss = train(train_epoch, model, optimizer, train_loader,
-        #                    vis, vis_window, args)
-        # all_training_losses.append(epoch_loss)
-
-        vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
+        epoch_loss = train(train_epoch, model, optimizer, train_loader,
                            vis, vis_window, args)
-        all_vqa_training_losses.append(vqa_epoch_loss)
+        all_training_losses.append(epoch_loss)
+        vqa_model.frame_emb = model.frame_emb
+        if not args.distributed or (args.distributed and dist.get_rank() == 0):
+            vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
+                               vis, vis_window, args)
+            all_vqa_training_losses.append(vqa_epoch_loss)
 
-        # (valid_loss, val_cls_loss,
-        #  val_reg_loss, val_sent_loss, val_mask_loss) = valid(model, valid_loader)
+        (valid_loss, val_cls_loss,
+         val_reg_loss, val_sent_loss, val_mask_loss) = valid(model, valid_loader)
 
         vqa_valid_loss, vqa_valid_accuracy = valid_vqa(vqa_model, vqa_valid_loader)
 
@@ -410,51 +408,49 @@ def main(args):
                                       'dev_sentence',
                                       'dev_mask']))
 
-        # if valid_loss < best_loss:
-        #     best_loss = valid_loss
-        #     if (args.distributed and dist.get_rank() == 0) or not args.distributed:
-        #         torch.save(model.module.state_dict(), os.path.join(args.checkpoint_path, 'best_model.t7'))
-        #     print('*'*5)
-        #     print('Better validation loss {:.4f} found, save model'.format(valid_loss))
-        #
-        # # save eval and train losses
-        # if (args.distributed and dist.get_rank() == 0) or not args.distributed:
-        #     torch.save({'train_loss':all_training_losses,
-        #                 'eval_loss':all_eval_losses,
-        #                 'eval_cls_loss':all_cls_losses,
-        #                 'eval_reg_loss':all_reg_losses,
-        #                 'eval_sent_loss':all_sent_losses,
-        #                 'eval_mask_loss':all_mask_losses,
-        #                 }, os.path.join(args.checkpoint_path, 'model_losses.t7'))
-        #
-        # # learning rate decay
-        # scheduler.step(valid_loss)
-        #
-        # # validation/save checkpoint every a few epochs
-        # if train_epoch%args.save_checkpoint_every == 0 or train_epoch == args.max_epochs:
-        #     if (args.distributed and dist.get_rank() == 0) or not args.distributed:
-        #         torch.save(model.module.state_dict(),
-        #                os.path.join(args.checkpoint_path, 'model_epoch_{}.t7'.format(train_epoch)))
-        #
-        # # all other process wait for the 1st process to finish
-        # # if args.distributed:
-        # #     dist.barrier()
-        #
-        # print('-'*80)
-        # print('Epoch {} summary'.format(train_epoch))
-        # print('Train loss: {:.4f}, val loss: {:.4f}, Time: {:.4f}s'.format(
-        #     epoch_loss, valid_loss, time.time()-t_epoch_start
-        # ))
-        # print('val_cls: {:.4f}, '
-        #       'val_reg: {:.4f}, val_sentence: {:.4f}, '
-        #       'val mask: {:.4f}'.format(
-        #     val_cls_loss, val_reg_loss, val_sent_loss, val_mask_loss
-        # ))
+        if valid_loss < best_loss:
+            best_loss = valid_loss
+            if (args.distributed and dist.get_rank() == 0) or not args.distributed:
+                torch.save(model.module.state_dict(), os.path.join(args.checkpoint_path, 'best_model.t7'))
+            print('*'*5)
+            print('Better validation loss {:.4f} found, save model'.format(valid_loss))
+
+        # save eval and train losses
+        if (args.distributed and dist.get_rank() == 0) or not args.distributed:
+            torch.save({'train_loss':all_training_losses,
+                        'eval_loss':all_eval_losses,
+                        'eval_cls_loss':all_cls_losses,
+                        'eval_reg_loss':all_reg_losses,
+                        'eval_sent_loss':all_sent_losses,
+                        'eval_mask_loss':all_mask_losses,
+                        }, os.path.join(args.checkpoint_path, 'model_losses.t7'))
+
+        # learning rate decay
+        scheduler.step(valid_loss)
+
+        # validation/save checkpoint every a few epochs
+        if train_epoch%args.save_checkpoint_every == 0 or train_epoch == args.max_epochs:
+            if (args.distributed and dist.get_rank() == 0) or not args.distributed:
+                torch.save(model.module.state_dict(),
+                       os.path.join(args.checkpoint_path, 'model_epoch_{}.t7'.format(train_epoch)))
+
+        # all other process wait for the 1st process to finish
+        # if args.distributed:
+        #     dist.barrier()
+
+        print('-'*80)
+        print('Epoch {} summary'.format(train_epoch))
+        print('Train loss: {:.4f}, val loss: {:.4f}, Time: {:.4f}s'.format(
+            epoch_loss, valid_loss, time.time()-t_epoch_start
+        ))
+        print('val_cls: {:.4f}, '
+              'val_reg: {:.4f}, val_sentence: {:.4f}, '
+              'val mask: {:.4f}'.format(
+            val_cls_loss, val_reg_loss, val_sent_loss, val_mask_loss
+        ))
 
 
-        #if vqa_valid_loss < best_vqa_loss:
         if vqa_valid_accuracy > best_vqa_accuracy:
-            #best_loss = vqa_valid_loss
             best_vqa_accuracy = vqa_valid_accuracy
             if (args.distributed and dist.get_rank() == 0) or not args.distributed:
                 torch.save(vqa_model.state_dict(), os.path.join(args.checkpoint_path, 'best_vqa_model.t7'))
@@ -462,14 +458,14 @@ def main(args):
             print('Better validation accuracy found {:.4f} found, save model'.format(vqa_valid_accuracy))
         print('Best accuracy found till now {}'.format(best_vqa_accuracy))
         # save eval and train losses
-        # if (args.distributed and dist.get_rank() == 0) or not args.distributed:
-        #     torch.save({'train_loss':all_training_losses,
-        #                 'eval_loss':all_eval_losses,
-        #                 'eval_cls_loss':all_cls_losses,
-        #                 'eval_reg_loss':all_reg_losses,
-        #                 'eval_sent_loss':all_sent_losses,
-        #                 'eval_mask_loss':all_mask_losses,
-        #                 }, os.path.join(args.checkpoint_path, 'model_losses.t7'))
+        if (args.distributed and dist.get_rank() == 0) or not args.distributed:
+            torch.save({'train_loss':all_training_losses,
+                        'eval_loss':all_eval_losses,
+                        'eval_cls_loss':all_cls_losses,
+                        'eval_reg_loss':all_reg_losses,
+                        'eval_sent_loss':all_sent_losses,
+                        'eval_mask_loss':all_mask_losses,
+                        }, os.path.join(args.checkpoint_path, 'model_losses.t7'))
 
         # learning rate decay
         vqa_scheduler.step(vqa_valid_accuracy)

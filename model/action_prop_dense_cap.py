@@ -9,6 +9,7 @@
 from torch import nn
 from torch.autograd import Variable
 from .transformer import Transformer, RealTransformer
+from model.frame_encoder import FrameEncoder
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -77,20 +78,20 @@ class ActionPropDenseCap(nn.Module):
             nn.ReLU(),
             nn.Linear(d_model, window_length),
         )
-
-        self.rgb_emb = nn.Linear(2048, d_model // 2)
-        self.flow_emb = nn.Linear(1024, d_model // 2)
-        self.emb_out = nn.Sequential(
-            # nn.BatchNorm1d(h_dim),
-            DropoutTime1D(in_emb_dropout),
-            nn.ReLU()
-        )
-
-        self.vis_emb = Transformer(d_model, 0, 0,
-                                   d_hidden=d_hidden,
-                                   n_layers=n_layers,
-                                   n_heads=n_heads,
-                                   drop_ratio=attn_dropout)
+        self.frame_emb = FrameEncoder(d_model, in_emb_dropout, d_hidden, n_layers, n_heads, attn_dropout)
+        # self.rgb_emb = nn.Linear(2048, d_model // 2)
+        # self.flow_emb = nn.Linear(1024, d_model // 2)
+        # self.emb_out = nn.Sequential(
+        #     # nn.BatchNorm1d(h_dim),
+        #     DropoutTime1D(in_emb_dropout),
+        #     nn.ReLU()
+        # )
+        #
+        # self.vis_emb = Transformer(d_model, 0, 0,
+        #                            d_hidden=d_hidden,
+        #                            n_layers=n_layers,
+        #                            n_heads=n_heads,
+        #                            drop_ratio=attn_dropout)
 
         self.vis_dropout = DropoutTime1D(vis_emb_dropout)
 
@@ -131,16 +132,16 @@ class ActionPropDenseCap(nn.Module):
                 gated_mask=False):
         B, T, _ = x.size()
         dtype = x.data.type()
-
-        x_rgb, x_flow = torch.split(x, 2048, 2)
-        x_rgb = self.rgb_emb(x_rgb.contiguous())
-        x_flow = self.flow_emb(x_flow.contiguous())
-
-        x = torch.cat((x_rgb, x_flow), 2)
-
-        x = self.emb_out(x)
-
-        vis_feat, all_emb = self.vis_emb(x)
+        vis_feat, all_emb = self.frame_emb(x)
+        # x_rgb, x_flow = torch.split(x, 2048, 2)
+        # x_rgb = self.rgb_emb(x_rgb.contiguous())
+        # x_flow = self.flow_emb(x_flow.contiguous())
+        #
+        # x = torch.cat((x_rgb, x_flow), 2)
+        #
+        # x = self.emb_out(x)
+        #
+        # vis_feat, all_emb = self.vis_emb(x)
         # vis_feat = self.vis_dropout(vis_feat)
 
         # B x T x H -> B x H x T
