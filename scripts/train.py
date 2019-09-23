@@ -69,7 +69,7 @@ parser.add_argument('--sample_prob', default=0, type=float, help='probability fo
 # Model settings: Proposal and mask
 parser.add_argument('--slide_window_size', default=480, type=int, help='the (temporal) size of the sliding window')
 parser.add_argument('--slide_window_stride', default=20, type=int, help='the step size of the sliding window')
-parser.add_argument('--sampling_sec', default=2, help='sample frame (RGB and optical flow) with which time interval')
+parser.add_argument('--sampling_sec', default=0.5, help='sample frame (RGB and optical flow) with which time interval')
 parser.add_argument('--kernel_list', default=[1, 2, 3, 4, 5, 7, 9, 11, 15, 21, 29, 41, 57, 71, 111, 161, 211, 251],
                     type=int, nargs='+')
 parser.add_argument('--pos_thresh', default=0.7, type=float)
@@ -239,7 +239,8 @@ def get_model(text_proc, args):
                                nsamples=args.train_sample,
                                kernel_list=args.kernel_list,
                                stride_factor=args.stride_factor,
-                               learn_mask=args.mask_weight>0)
+                               learn_mask=args.mask_weight>0,
+                               window_length=args.slide_window_size)
 
     # Initialize the networks and the criterion
     if len(args.start_from) > 0:
@@ -351,11 +352,12 @@ def main(args):
         epoch_loss = train(train_epoch, model, optimizer, train_loader,
                            vis, vis_window, args)
         all_training_losses.append(epoch_loss)
-        vqa_model.frame_emb = model.frame_emb
+        vqa_model.frame_emb = model.module.frame_emb
         if not args.distributed or (args.distributed and dist.get_rank() == 0):
             vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
                                vis, vis_window, args)
             all_vqa_training_losses.append(vqa_epoch_loss)
+            model.module.frame_emb = vqa_model.frame_emb
 
         (valid_loss, val_cls_loss,
          val_reg_loss, val_sent_loss, val_mask_loss) = valid(model, valid_loader)

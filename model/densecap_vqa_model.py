@@ -88,7 +88,7 @@ class TransformerBaseline(ProtocolNet):
         Q_feature = self.Q_LSTM(embeded_Q)
 
         tic = time.time()
-        V_feature, all_emb = self.frame_emb(img_feat)
+        V_feature, all_emb, _ = self.frame_emb(img_feat)
         V_feature = self.linear(V_feature)
         V_feature = nn.MaxPool1d(kernel_size=V_feature.shape[1])(V_feature.view(V_feature.size(0), 512, -1)).squeeze(2)
         tok = time.time()

@@ -116,7 +116,7 @@ class ActionPropDenseCap(nn.Module):
             ])
 
         self.cap_model = RealTransformer(d_model,
-                                         self.vis_emb.encoder, #share the encoder
+                                         self.frame_emb.vis_emb.encoder, #share the encoder
                                          vocab,
                                          d_hidden=d_hidden,
                                          n_layers=n_layers,
@@ -132,7 +132,7 @@ class ActionPropDenseCap(nn.Module):
                 gated_mask=False):
         B, T, _ = x.size()
         dtype = x.data.type()
-        vis_feat, all_emb = self.frame_emb(x)
+        vis_feat, all_emb, x = self.frame_emb(x)
         # x_rgb, x_flow = torch.split(x, 2048, 2)
         # x_rgb = self.rgb_emb(x_rgb.contiguous())
         # x_flow = self.flow_emb(x_flow.contiguous())

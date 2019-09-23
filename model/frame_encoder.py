@@ -57,4 +57,4 @@ class FrameEncoder(torch.nn.Module):
         x = self.emb_out(x)
 
         vis_feat, all_emb = self.vis_emb(x)
-        return vis_feat, all_emb
+        return vis_feat, all_emb, x
