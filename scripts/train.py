@@ -284,17 +284,17 @@ def main(args):
 
     print('loading dataset')
     train_loader, valid_loader, text_proc, train_sampler = get_dataset(args)
-    vqa_train_loader, vqa_valid_loader, vocab_size = get_vqa_dataset(args)
+    #vqa_train_loader, vqa_valid_loader, vocab_size = get_vqa_dataset(args)
 
     print('building model')
     model = get_model(text_proc, args)
-    vqa_model = get_vqa_model(args, vocab_size)
-    print(vqa_model.vocab_size)
-
-    vqa_optimizer = torch.optim.Adam(vqa_model.parameters(), lr=5E-4)
-    vqa_scheduler = lr_scheduler.ReduceLROnPlateau(vqa_optimizer, 'max', factor=0.25,
-                                             patience=4,
-                                             verbose=True)
+    #vqa_model = get_vqa_model(args, vocab_size)
+    # print(vqa_model.vocab_size)
+    #
+    # vqa_optimizer = torch.optim.Adam(vqa_model.parameters(), lr=5E-4)
+    # vqa_scheduler = lr_scheduler.ReduceLROnPlateau(vqa_optimizer, 'max', factor=0.25,
+    #                                          patience=4,
+    #                                          verbose=True)
 
 
     # filter params that don't require gradient (credit: PyTorch Forum issue 679)
@@ -318,12 +318,12 @@ def main(args):
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=args.reduce_factor,
                                                patience=args.patience_epoch,
                                                verbose=True)
-    scheduler = lr_scheduler.ExponentialLR(optimizer, 0.6)
+    #scheduler = lr_scheduler.ExponentialLR(optimizer, 0.6)
 
     # Number of parameter blocks in the network
     print("# of param blocks: {}".format(str(len(list(model.parameters())))))
 
-    best_vqa_accuracy = -1*float('inf')
+    #best_vqa_accuracy = -1*float('inf')
     best_loss = float('inf')
 
     if args.enable_visdom:
@@ -352,19 +352,19 @@ def main(args):
         epoch_loss = train(train_epoch, model, optimizer, train_loader,
                            vis, vis_window, args)
         all_training_losses.append(epoch_loss)
-        vqa_model.frame_emb = model.module.frame_emb
-        if not args.distributed or (args.distributed and dist.get_rank() == 0):
-            vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
-                               vis, vis_window, args)
-            all_vqa_training_losses.append(vqa_epoch_loss)
-            model.module.frame_emb = vqa_model.frame_emb
+        # vqa_model.frame_emb = model.module.frame_emb
+        # if not args.distributed or (args.distributed and dist.get_rank() == 0):
+        #     vqa_epoch_loss, vqa_train_epoch_accuracy = train_vqa(train_epoch, vqa_model, vqa_optimizer, vqa_train_loader,
+        #                        vis, vis_window, args)
+        #     all_vqa_training_losses.append(vqa_epoch_loss)
+        #     model.module.frame_emb = vqa_model.frame_emb
 
         (valid_loss, val_cls_loss,
          val_reg_loss, val_sent_loss, val_mask_loss) = valid(model, valid_loader)
 
-        vqa_valid_loss, vqa_valid_accuracy = valid_vqa(vqa_model, vqa_valid_loader)
+        #vqa_valid_loss, vqa_valid_accuracy = valid_vqa(vqa_model, vqa_valid_loader)
 
-        all_vqa_eval_losses.append(vqa_valid_loss)
+        #all_vqa_eval_losses.append(vqa_valid_loss)
 
         if args.enable_visdom:
             if vis_window['loss'] is None:
@@ -451,7 +451,7 @@ def main(args):
             val_cls_loss, val_reg_loss, val_sent_loss, val_mask_loss
         ))
 
-
+        """
         if vqa_valid_accuracy > best_vqa_accuracy:
             best_vqa_accuracy = vqa_valid_accuracy
             if (args.distributed and dist.get_rank() == 0) or not args.distributed:
@@ -488,6 +488,7 @@ def main(args):
             vqa_epoch_loss, vqa_valid_loss, time.time()-t_epoch_start
         ))
         print('-'*80)
+        """
 
 def train_vqa(epoch, model, optimizer, train_loader, vis, vis_window, args):
     model.train() # training mode
