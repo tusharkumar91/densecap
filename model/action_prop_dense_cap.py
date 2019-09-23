@@ -318,7 +318,9 @@ class ActionPropDenseCap(nn.Module):
                   gated_mask=False):
         B, T, _ = x.size()
         dtype = x.data.type()
+        vis_feat, all_emb, x = self.frame_emb(x)
 
+        """
         x_rgb, x_flow = torch.split(x, 2048, 2)
         x_rgb = self.rgb_emb(x_rgb.contiguous())
         x_flow = self.flow_emb(x_flow.contiguous())
@@ -329,7 +331,7 @@ class ActionPropDenseCap(nn.Module):
 
         vis_feat, all_emb = self.vis_emb(x)
         # vis_feat = self.vis_dropout(vis_feat)
-
+        """
         # B x T x H -> B x H x T
         # for 1d conv
         vis_feat = vis_feat.transpose(1,2).contiguous()

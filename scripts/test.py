@@ -58,7 +58,7 @@ parser.add_argument('--n_layers', default=2, type=int, help='number of layers in
 # Model settings: Proposal and mask
 parser.add_argument('--slide_window_size', default=480, type=int, help='the (temporal) size of the sliding window')
 parser.add_argument('--slide_window_stride', default=20, type=int, help='the step size of the sliding window')
-parser.add_argument('--sampling_sec', default=2, help='sample frame (RGB and optical flow) with which time interval')
+parser.add_argument('--sampling_sec', default=0.5, help='sample frame (RGB and optical flow) with which time interval')
 parser.add_argument('--kernel_list', default=[1, 2, 3, 4, 5, 7, 9, 11, 15, 21, 29, 41, 57, 71, 111, 161, 211, 251],
                     type=int, nargs='+')
 parser.add_argument('--max_prop_num', default=500, type=int, help='the maximum number of proposals per video')
