@@ -47,14 +47,15 @@ class Video_LSTM(nn.Module):
 
 
 class Question_LSTM(nn.Module):
-    def __init__(self, hidden_size=512):
+    def __init__(self, input_size=300, hidden_size=1024):
         super(Question_LSTM, self).__init__()
 
-        self.rnn = nn.GRU(  # if use nn.RNN(), it hardly learns
-            input_size=word_dim,
+        self.rnn = nn.LSTM(  # if use nn.RNN(), it hardly learns
+            input_size=input_size,
             hidden_size=hidden_size,  # rnn hidden unit
             num_layers=1,  # number of rnn layer
             batch_first=True,
+            bidirectional=True
             # input & output will have batch size as first dimension. e.g. (batch, time_step, input_size)
         )
 

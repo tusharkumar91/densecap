@@ -177,7 +177,7 @@ class Encoder(nn.Module):
 
     def forward(self, x, mask=None):
         # x = self.linear(x)
-        x = x+positional_encodings_like(x)
+        #x = x+positional_encodings_like(x)
         x = self.dropout(x)
         if mask is not None:
             x = x*mask
@@ -300,8 +300,8 @@ class Transformer(nn.Module):
         return ' '.join(self.decoder.vocab.itos[i] for i in data).replace(
             ' <eos>', '#').replace(' <pad>', '')
 
-    def forward(self, x):
-        encoding = self.encoder(x)
+    def forward(self, x, mask=None):
+        encoding = self.encoder(x, mask)
         # if not self.training:
         #     greedy = self.decoder.greedy(encoding)
         #     print(self.denum(greedy.data[0]),

@@ -13,11 +13,11 @@ class MaxMarginCriterion(torch.nn.Module):
             correct_idx = (target[batch] == 1).nonzero()[0]
             correct_sim = cossim[batch][correct_idx]
             batch_loss = 0
-            #print(correct_sim)
-            #print(correct_idx)
+            count = 0
             for ch_idx in range(choices):
                 if ch_idx != correct_idx:
+                    count += 1
                     batch_loss += torch.clamp(self.margin + cossim[batch][ch_idx] - correct_sim, min=0)
-                    #print("adding batch loss", batch_loss)
+            #batch_loss = batch_loss / count
             loss += batch_loss
         return loss / N

@@ -52,13 +52,10 @@ class ProtocolNet(nn.Module):
         #                        nn.ReLU(),
         #                        nn.Dropout(0.5),
         #                        nn.Linear(self.hidden_dim, self.out_dim)).cuda()
-        self.FC_Answer = nn.Sequential(nn.Linear(1024, 256), nn.Tanh(), nn.Linear(256, 1)).cuda()
-        self.FC_Answer2 = nn.Sequential(nn.Linear(512, 1)).cuda()
+        self.FC_Answer = nn.Sequential(nn.Linear(1024, 1)).cuda()
         self.attn_linear = nn.Sequential(nn.Linear(1024, 1024), nn.Tanh()).to(device)
-        self.seq_attn = nn.Sequential(nn.Linear(1024, 512), nn.Tanh(), nn.Linear(512, 1)).cuda()
-        self.seq_pred = nn.Sequential(nn.Linear(2048, 1024)).cuda()
-        self.before_after_pred = nn.Sequential(nn.Linear(1536, 256), nn.Tanh(), nn.Linear(256, 2)).cuda()
-        self.seq_pred_before = nn.Sequential(nn.Linear(2048, 1024)).cuda()
+        self.temp_attn = nn.Sequential(nn.Linear(2048, 512), nn.Tanh(), nn.Linear(512, 1)).cuda()
+        self.seq_pred = nn.Sequential(nn.Linear(4096, 256), nn.Tanh(), nn.Linear(256, 2)).cuda()
         #self.FC_Answer2 = nn.Sequential(nn.Linear(512, 144)).cuda()
         #self.FC_Output = nn.Sequential(nn.Linear(1024, 300), nn.Tanh(), nn.Dropout(0.1)).cuda()
         #self.bert = BertModel.from_pretrained('bert-base-uncased', output_hidden_states=True)
@@ -88,12 +85,7 @@ class ProtocolNet(nn.Module):
         #d_model = 512  # Original res feature is 512d
 
         self.q_layer1 = nn.Sequential(nn.Linear(1024, 512), nn.Tanh()).to(device)
-        self.a_layer1 = nn.Sequential(nn.Linear(1024, 512), nn.Tanh()).to(device)
-        #self.q_layer4 = nn.Sequential(nn.Linear(1024, 1024)).to(device)
-        self.v_layer2 = nn.Sequential(nn.Linear(1024, 1024), nn.Tanh()).to(device)
-        self.v_layer3 = nn.Sequential(nn.Linear(1024, 512), nn.Tanh()).to(device)
-        self.v_layer1 = nn.Sequential(nn.Linear(4096, 1024), nn.Tanh(), nn.Linear(1024, 1024), nn.Tanh()).to(device)
-        self.fus_layer1 = nn.Sequential(nn.Linear(1024, 512), nn.Tanh()).to(device)
+        self.v_layer1 = nn.Sequential(nn.Linear(3072, 1024), nn.Tanh()).to(device)
         self.fc_max = nn.Sequential(nn.Linear(512, 1)).to(device)
         
         
@@ -136,12 +128,12 @@ class ProtocolNet(nn.Module):
             #ch_bert = torch.cat(ch_bert, dim=1)
             
             embeded_A = self.embeds_QA(choices[:, idx_permute].long().to(device))
-            #print(embeded_A[0][0][0][:10])
-            #print(embeded_A[0][1][0][:10])
             A_feature_list = []
+            #hn = Q_feature.reshape(-1, 2, 512).permute(1, 0, 2).contiguous()
+            #print(hn.shape)
             #print(n_choices, batch_size)
             for i in range(n_choices):
-                A_feature_out, (A_feature_hn, A_feature_cn) = self.Q_LSTM(embeded_A[:, i, :, :])
+                A_feature_out, (A_feature_hn, A_feature_cn) = self.A_LSTM(embeded_A[:, i, :, :])#, (hn, torch.zeros((hn.shape)).cuda()))
                 '''
                 A_feature_batch = []
                 for j in range(batch_size):
@@ -154,8 +146,7 @@ class ProtocolNet(nn.Module):
                 #print(A_feature_batch_i.shape)
                 A_feature_list.append(A_feature_batch_i.unsqueeze(1))
             A_feature = torch.cat(A_feature_list, dim=1)
-            #print(A_feature[0][0][:10])
-            #print(A_feature[0][1][:10])
+            
             #A_feature_out, (A_feature_hn, A_feature_cn) = self.A_LSTM(embeded_A.view(-1, embeded_A.size(2), embeded_A.size(3)))
             #print(A_feature.shape)
             #A_feature_out = A_feature_out.view(embeded_A.size(0), 5, -1)
@@ -205,7 +196,7 @@ class ProtocolNet(nn.Module):
         #va_feature = self.va_fusion(torch.cat([v_feature_normalized, A_feature_normalized], dim=-1))
         #print(va_feature.shape)
         #va_feature_normalized = nn.functional.normalize(va_feature, p=2, dim=-1)
-        out_feature = A_feature_normalized + vq_feature_normalized
+        out_feature = A_feature_normalized*vq_feature_normalized
         #print(out_feature.shape)
         #print('-'*10)
         #print(ch_bert[0][0][:5])
@@ -229,6 +220,7 @@ class ProtocolNet(nn.Module):
         #outs = self.vq_fusion(cat_feature).squeeze()
         #outs = nn.Softmax(dim=1)(outs)
         #cossim = torch.sum(A_feature_normalized * out_feature_normalized, 2)
+        #print(outs[0])
         #outs = nn.Softmax(dim=1)(outs)
         #print(outs[0])
         #print(cossim[0])

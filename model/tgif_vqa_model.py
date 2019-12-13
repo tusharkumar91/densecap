@@ -5,7 +5,7 @@ import time
 import numpy as np
 from torch import nn
 from model.model import Net
-from model.ProtocolNet import ProtocolNet
+from model.TGIFProtocolNet import ProtocolNet
 from model.transformer import Transformer
 from model.frame_encoder import FrameEncoder
 import sys
@@ -59,15 +59,15 @@ class DropoutTime1D(nn.Module):
         repstr += ')'
         return repstr
 
-class TransformerBaseline(ProtocolNet):
+class TGIFTransformerBaseline(ProtocolNet):
     def __init__(self, vocab_size, mode='Trans', d_model=1024, in_emb_dropout=0.1):
         self.name = mode
         self.vocab_size = vocab_size
         fc_n_feature = 512
-        super(TransformerBaseline, self).__init__(1536 + 512, mode)
+        super(TGIFTransformerBaseline, self).__init__(1536 + 512, mode)
         #self.frame_emb = FrameEncoder(1024, in_emb_dropout, 2048, 2, 8, 0.2)
         self.vid_lstm = nn.LSTM(
-            input_size=1024,
+            input_size=3072,
             hidden_size=1024,
             batch_first=True,
             
@@ -77,7 +77,7 @@ class TransformerBaseline(ProtocolNet):
         self.emb_out = nn.Sequential(
              #nn.Linear(d_model, d_model),
              # nn.BatchNorm1d(h_dim),
-             #nn.Dropout(0.1),
+             nn.Dropout(0.1),
              nn.Tanh()
         )
         #
@@ -107,11 +107,9 @@ class TransformerBaseline(ProtocolNet):
         #Q_feature = self.q_linear(q_feat)
         #exit(0)
         embeded_Q = self.embeds_QA(q.long().cuda())
-        #print(embeded_Q[0][:10])
-        #print(embeded_Q[1][:10])
         seg_feature_out, (seg_feature_hn, seg_feature_cn) = self.Q_LSTM(embeded_Q)
 
-        embeded_labels = self.embeds_QA(seg.long().cuda())
+        #embeded_label = self.embeds_QA(seg.long().cuda())
         #print(seg_feature_out.shape)
         #print(Q_feature)
         seg_text_cat_feat = []
@@ -179,17 +177,16 @@ class TransformerBaseline(ProtocolNet):
         Q_feature_seg = seg_feature_out
         Q_feature_list = []
         label_feature_list = []
-        label_feat = torch.zeros((batch_size, 17, 1024)).cuda()
-        
+        #label_feat = torch.zeros((batch_size, 17, 1024)).cuda()
         for i in range(batch_size):
             #print(V_feature_seg[i, :, :].shape, num_seg[i])
             # take nth hidden feature
             Q_feature_i = Q_feature_seg[i, :, :].squeeze(0)[num_seg[i], :].unsqueeze(0)
-            label_feature_i = torch.zeros((17, 1024)).cuda()
-            for j in range(seg_mask[i]):
-                label_feature_j_out, (label_feature_j_hn, label_feature_j_cn) = self.Q_LSTM(embeded_labels[i, j].unsqueeze(0))
-                label_feature_i[j] = label_feature_j_hn.reshape(-1).squeeze()
-            label_feat[i] = label_feature_i
+            #label_feature_i = torch.zeros((17, 1024)).cuda()
+            #for j in range(seg_mask[i]):
+            #    label_feature_j_out, (label_feature_j_hn, label_feature_j_cn) = self.Q_LSTM(embeded_labels[i, j].unsqueeze(0))
+            #    label_feature_i[j] = label_feature_j_hn.reshape(-1).squeeze()
+            #label_feat[i] = label_feature_i
             # mean of all features till n
             #V_feature_i = V_feature_seg[i, :, :].squeeze(0)[:num_seg[i], :].mean(dim=0).unsqueeze(0)
             #print(V_feature_i.shape)
@@ -198,14 +195,13 @@ class TransformerBaseline(ProtocolNet):
             Q_feature_list.append(Q_feature_i)
             #print(V_feature_i.shape)
         Q_feature = torch.cat(Q_feature_list, dim=0)
-        
         #Q_feature_max = Q_feature.unsqueeze(1).repeat((1, 17, 1))
         #label_feature_max = Q_feature_max + label_feat
         #label_feature_max = self.fc_max(label_feature_max).squeeze(-1)
         #print(label_feature_max.shape)
         #print('label max fc out', label_feature_max[0])
         #vid_max_seg = []
-        #for i in range(batch_size):
+        #for i in range(batch_sizçe):
         #    #print(label_feature_max[i, :seg_mask[i]])
         #    vid_max_seg_i = torch.argmax(label_feature_max[i, :seg_mask[i]])
         #    #print(vid_max_seg_i)
@@ -218,7 +214,6 @@ class TransformerBaseline(ProtocolNet):
         #pickle.dump(a, open('input_seqpred_video.pkl', 'wb'))
         #x_rgb, x_flow = torch.split(seg, 2048, 2)
         #vid = self.v_layer1(seg)
-        #with torch.no_grad():
         #x_rgb = self.rgb_emb(x_rgb.contiguous())
         #x_flow = self.flow_emb(x_flow.contiguous())
         #x = torch.cat((x_rgb, x_flow), 2)
@@ -227,37 +222,38 @@ class TransformerBaseline(ProtocolNet):
         #x = torch.rand((x.shape)).cuda()
         #Q_fusion_feature = Q_feature.unsqueeze(1).repeat((1, x.shape[1], 1))
         #VQ_feature = torch.cat((x, Q_fusion_feature), dim=-1)
-        #V_feature_emb, all_emb, _ = self.frame_emb(x, None)
-        #V_feature_emb = torch.rand((32, 480, 1024)).cuda()
-        #V_feature = nn.MaxPool1d(kernel_size=V_feature_emb.shape[1])(V_feature_emb.view(V_feature_emb.size(0), 1024, -1)).squeeze(2)
+        #V_feature, all_emb, _ = self.frame_emb(x, None)
+        #V_feature = nn.MaxPool1d(kernel_size=V_feature.shape[1])(V_feature.view(V_feature.size(0), 1024, -1)).squeeze(2)
         #vid_feat = torch.rand((vid_feat.shape)).cuda()
         #Q_feature = self.q_layer1(Q_feature)
         #label_feat_kb = self.q_layer1(label_feat)
-        
         kb = torch.zeros((batch_size, 1024)).cuda()
         #kb = Q_feature.clone()
         hn = Q_feature.clone()
         #hn = torch.zeros((batch_size, 1024)).cuda() 
         #print('in lstm')
-        #v = self.v_layer1(seg)
-        for _ in range(5):
+        for _ in range(1):
             vid_feature_list = []
-            vid_feature_out, (vid_feature_hn, vid_feature_cn) = self.vid_lstm(label_feat, (hn.unsqueeze(0), torch.zeros((hn.unsqueeze(0).shape)).cuda()))
+            vid_feature_out, (vid_feature_hn, vid_feature_cn) = self.vid_lstm(seg, (hn.unsqueeze(0), torch.zeros((hn.unsqueeze(0).shape)).cuda()))
             for i in range(batch_size):
                 vid_feature_i = vid_feature_out[i, :, :].squeeze(0)[seg_mask[i]-1, :].unsqueeze(0)
                 #tgif attention
-                #seq_attn = self.temp_attn(vid_feature_out[i, :, :].squeeze(0)[:seg_mask[i], :])
-                #vid_feature_list.append(vid_feature_i)
-                kb[i] += vid_feature_i.squeeze()
-            hn = kb.clone()
-        
+                Q_attn_feature = Q_feature[i, :].unsqueeze(0).repeat((seg_mask[i], 1))
+                input_attn_feature = torch.cat((Q_attn_feature, vid_feature_out[i, :, :].squeeze(0)[:seg_mask[i], :]), dim=-1)
+                seq_attn = self.temp_attn(input_attn_feature)
+                seq_attn = seq_attn.reshape((1, -1))
+                v_attn_feature = torch.matmul(seq_attn, vid_feature_out[i, :, :].squeeze(0)[:seg_mask[i], :])
+                v_attn_feature = self.attn_linear(v_attn_feature)
+                vid_feature_list.append(v_attn_feature)
+                #kb[i] += vid_feature_i.squeeze()
+            #hn = kb.clone()
         #print('out lstm')
         #print(vid_feature_out.shape)
         #for i in range(batch_size):
         #    #vid_feature_i = label_feat[i, num_seg[i], :].unsqueeze(0)
         #    vid_feature_i = vid_feature_out[i, :, :].squeeze(0)[seg_mask[i]-1, :].unsqueeze(0)
         #    vid_feature_list.append(vid_feature_i)
-        #V_feature = torch.cat(vid_feature_list, dim=0)
+        V_feature = torch.cat(vid_feature_list, dim=0)
         #V_feature = vid_feature_out
         #V_feature = torch.rand((V_feature.shape)).cuda()
         #b.append(V_feature[0].cpu().detach().numpy())
@@ -286,7 +282,7 @@ class TransformerBaseline(ProtocolNet):
         #print('v feature after transformer', V_feature.shape)
         #V_feature = nn.MaxPool1d(kernel_size=V_feature.shape[1])(V_feature.view(V_feature.size(0), 1024, -1)).squeeze(2)
         #V_feature = self.linear_v(V_feature)
-        V_feature = kb
+        #V_feature = self.linear(V_feature)
         #print(V_feature.shape)
         #print(Q_feature.shape)
         #tok = time.time()
@@ -299,16 +295,17 @@ class TransformerBaseline(ProtocolNet):
         #VQ_feature = torch.cat([nn.functional.layer_norm(V_feature, [V_feature.shape[-1]]),
         #                        nn.functional.layer_norm(Q_feature, [Q_feature.shape[-1]])], dim=1)
         #print(VQ_feature.shape)
+        #Q_feature = self.q_layer1(Q_feature)
         #V_feature = torch.rand((V_feature.shape)).cuda()
         #print(torch.mean(V_feature))
         #print('q feature', Q_feature[0][:10])
         #print('output lstm', V_feature.shape, V_feature[0][:10])
         #V_feature_out = self.v_layer1(V_feature)
-        #V_feature_out = V_feature
+        #V_feature_out = kb
         
         #cls_input = torch.zeros((3*batch_size, 1536)).cuda()
         #cls_output = torch.zeros((3*batch_size)).long().cuda()
-        
+
         cls_input = []
         cls_output = []
         #vid_feat = self.q_layer1(x)
@@ -316,9 +313,8 @@ class TransformerBaseline(ProtocolNet):
         #label_feat_kb = self.q_layer1(label_feat)
         #label_feat_kb = label_feat
         input_idx = 0
-        
-        seg_frame_features = []
         '''
+        seg_frame_features = []
         for i in range(batch_size):
             seg_frame_feat_i = []
             for num in np.arange(0, seg_mask[i], 50):
@@ -326,108 +322,25 @@ class TransformerBaseline(ProtocolNet):
                 end = num+50
                 if end > seg_mask[i]:
                     end = seg_mask[i]
-                seg_frame_feat_i.append(torch.mean(x[i, start:end, :], dim = 0))
+                seg_frame_feat_i.append(torch.mean(vid[i, start:end, :], dim = 0))
                 #print(start, end)
             seg_frame_features.append(seg_frame_feat_i)
-        '''
-        for i in range(batch_size):
-            seg_frame_feat_i = []
-            for num in np.arange(0, seg_mask[i]):
-                seg_frame_feat_i.append(label_feat[i, num, :])
-            seg_frame_features.append(seg_frame_feat_i)
-        idx_permute = torch.randperm(10)
-        seq_pred_prevs = []
-        seq_pred_opts = []
-        seq_pred_targets = []
-        next_p = random.random()
-        if next_p < 0.5:
-            before = True
-        else:
-            before = False
-        #print(before)
         
         for i in range(batch_size):
             pairs = []
             #if len(seg_frame_features[i]) < 2:
             #    continue
-            if seg_mask[i] < 2:
-                continue
-            
-            incorrect_feats = []
-            if before is False:
-                for _ in range(1):
-                    first = random.choice(range(len(seg_frame_features[i])-1))
-                    #second = random.choice(range(first+1, len(seg_frame_features[i])))
-                    second = first+1
-                    batch_incorrect = list(range(first)) + list(range(second+1, len(seg_frame_features[i])))
-                    #print(first, second, batch_incorrect)
-                    random.shuffle(batch_incorrect)
-                    for idx in batch_incorrect:
-                        incorrect_feats.append(seg_frame_features[i][idx].unsqueeze(0))
-                    #incorrect_feats.extend(batch_incorrect)
-                    if len(batch_incorrect) < 10:
-                        batch_opts = list(range(i)) + list(range(i+1, batch_size))
-                        random.shuffle(batch_opts)
-                        reqs = 9 - len(batch_incorrect)
-                        count = 0
-                        for inc_batch in batch_opts:
-                            if count == reqs:
-                                break
-                            if len(seg_frame_features[inc_batch]) < 2:
-                                continue                            
-                            else:
-                                incorrect_feats.append(seg_frame_features[inc_batch][random.choice(range(len(seg_frame_features[inc_batch])-1))].unsqueeze(0))
-                                count += 1
-            else:
-                 first = random.choice(range(1, len(seg_frame_features[i])))
-                 second = first-1
-                 batch_incorrect = list(range(second)) + list(range(first+1, len(seg_frame_features[i])))
-                 #print(first, second, batch_incorrect)
-                 random.shuffle(batch_incorrect)
-                 for idx in batch_incorrect:
-                     incorrect_feats.append(seg_frame_features[i][idx].unsqueeze(0))
-                 if len(batch_incorrect) < 10:
-                     batch_opts = list(range(i)) + list(range(i+1, batch_size))
-                     random.shuffle(batch_opts)
-                     reqs = 9 - len(batch_incorrect)
-                     count = 0
-                     for inc_batch in batch_opts:
-                         if count == reqs:
-                             break
-                         if len(seg_frame_features[inc_batch]) < 2:
-                             continue
-                         else:
-                             incorrect_feats.append(seg_frame_features[inc_batch][random.choice(range(len(seg_frame_features[inc_batch])-1))].unsqueeze(0))
-                             count += 1
-            '''
-            for _ in range(3):
-                first = random.choice(range(len(seg_frame_features[i])-1))
-                second = random.choice(range(first+1, len(seg_frame_features[i])))  
-                pairs.append((first, second))
+            #for _ in range(1):
+            #    first = random.choice(range(len(seg_frame_features[i])-1))
+            #    second = random.choice(range(first+1, len(seg_frame_features[i])))
+            #    #second = first+1
+            #    pairs.append((first, second))
             #    #print(first, second)
-            #pairs = [(k, random.choice(range(k+1, len(seg_frame_features[i][i]-1))) for k in range(seg_mask[i]-25)]
-            #pairs = [(k, k+1) for k in range(seg_mask[i]-2)]
+            pairs = [(k, random.choice(range(k+1, seg_mask[i]-1))) for k in range(seg_mask[i]-2)]
             #print(pairs)
             random.shuffle(pairs)
             #print(pairs)
-            '''
-            opts = []
-            opts.append(seg_frame_features[i][second].unsqueeze(0))
-            opts.extend(incorrect_feats)
-            batch_target = torch.zeros(10)
-            batch_target[0]= 1
-            batch_target = batch_target[idx_permute]
-            batch_target = batch_target.unsqueeze(0)
-            batch_input = torch.cat(opts, dim=0)[idx_permute]
-            batch_input = batch_input.unsqueeze(0)
-            seq_pred_opts.append(batch_input)
-            seq_pred_prevs.append(torch.cat((kb[i], seg_frame_features[i][first]), dim=-1).unsqueeze(0))
-            seq_pred_targets.append(batch_target)
-            #
-            '''
             pairs = pairs
-
-            #pairs = pairs[:3]
             #before 0 after 1
             for pair in pairs:
                 p = random.random()
@@ -437,38 +350,23 @@ class TransformerBaseline(ProtocolNet):
                     label = 0
                     #print(seg_frame_features[i][x1].shape)
                     #cls_input[input_idx] = torch.cat([kb[i], label_feat_kb[i, x], label_feat_kb[i, y]])
-                    cls_input.append(torch.cat([kb[i], seg_frame_features[i][x1], seg_frame_features[i][y1]], dim=-1).unsqueeze(0))
-                    #cls_input.append(torch.cat([nn.functional.normalize(seg[i,x1,:], p=2, dim=-1), nn.functional.normalize(seg[i, y1, :], p=2, dim=-1)]).unsqueeze(0))
+                    
+                    cls_input.append(torch.cat([nn.functional.normalize(seg[i,x1,:], p=2, dim=-1), nn.functional.normalize(seg[i, y1, :], p=2, dim=-1)]).unsqueeze(0))
                 else:
                     y1, x1 = pair
                     #print(seg_frame_features[i][x1].shape)
                     label = 1
                     #cls_input[input_idx] = torch.cat([kb[i], label_feat_kb[i, y], label_feat_kb[i, x]])
-                    cls_input.append(torch.cat([kb[i], seg_frame_features[i][y1], seg_frame_features[i][x1]], dim=-1).unsqueeze(0))
-                    #cls_input.append(torch.cat([nn.functional.normalize(seg[i, y1, :], p=2, dim=-1), nn.functional.normalize(seg[i, x1, :], p=2, dim=-1)]).unsqueeze(0))
+                    cls_input.append(torch.cat([nn.functional.normalize(seg[i, y1, :], p=2, dim=-1), nn.functional.normalize(seg[i, x1, :], p=2, dim=-1)]).unsqueeze(0))
                 #cls_output[input_idx] = label
                 cls_output.append(label)
                 input_idx += 1
-                '''
-        cls_input = torch.cat(seq_pred_prevs, dim=0).cuda()
-        
-        cls_output = torch.cat(seq_pred_targets, dim=0).long().cuda()
-        #print(cls_input.shape, cls_output.shape)
-        if before is False:
-            cls_pred = self.seq_pred(cls_input).unsqueeze(1)
-        else:
-            cls_pred = self.seq_pred_before(cls_input).unsqueeze(1)
-        
-        cls_pred = nn.functional.normalize(cls_pred.repeat((1, 10, 1)), p=2, dim=-1)
-        cls_opts = nn.functional.normalize(torch.cat(seq_pred_opts, dim=0), p=2, dim=-1)
-        cossims = torch.sum(cls_opts * cls_pred, 2)
-        '''
         cls_input = torch.cat(cls_input, dim=0).cuda()
-        cls_target = torch.LongTensor(cls_output).cuda()
-        cls_pred = self.before_after_pred(cls_input)
+        cls_output = torch.LongTensor(cls_output).cuda()
+        #print(cls_input.shape, cls_output.shape)
+        cls_pred = self.seq_pred(cls_input)        
+        print(torch.argmax(cls_pred, dim=1))
         '''
-        #print(cossims)
-        #print(cls_pred.shape, cls_opts.shape, cls_input.shape, cls_output.shape)
         #print('output vid layer', V_feature_out.shape, V_feature_out[0][:10])
         #params = torch.cat(list(self.v_layer1[0].parameters()), dim=0)
         #print(torch.min(torch.mean(params, dim=0)))
@@ -479,7 +377,6 @@ class TransformerBaseline(ProtocolNet):
         VQ_feature_normalized = nn.functional.normalize(V_feature_l1_normalized, p=2, dim=-1)
         #VQ_feature_normalized = torch.zeros((Q_feature_normalized.shape)).cuda()
         Q_feature_out = Q_feature_normalized+VQ_feature_normalized
-        #Q_feature_out = Q_feature + kb
         #print('q norm', Q_feature_l1_normalized[0][:10])
         #print('max q', torch.max(Q_feature_l1_normalized[0]))
         #print('output norm', V_feature_l1_normalized.shape, V_feature_l1_normalized[0][:10])
@@ -488,13 +385,8 @@ class TransformerBaseline(ProtocolNet):
         #VQ_feature = self.vq_fusion(VQ_feature)
         #outs = self.multiheads(VQ_feature, Q_feature, choices)
         outs = self.multiheads(Q_feature_out, Q_feature, choices, choices_mask, num_seg)
-        #outs = (torch.rand((32, 5)).cuda(), torch.ones((32)).long().cuda())
-        
-        #cossims, cls_output = (torch.rand((32, 5)).cuda(), torch.ones((32, 5)).long().cuda())
         #outs = self.FC_Answer(Q_feature_out)
-        #print(cossims[0])
-        #print(cls_output[0])
         #outs = self.FC_Answer2(outs)
         #print(outs.shape)
         #print(cls_pred[0], cls_output[0])
-        return outs, (cossims, cls_output)
+        return outs#, (cls_pred, cls_output)
